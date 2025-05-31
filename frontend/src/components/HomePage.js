@@ -47,6 +47,18 @@ const HomePage = () => {
     // Processing states
     const [processing, setProcessing] = useState({});
 
+    const copyToClipboard = async (text, type) => {
+        try {
+            await navigator.clipboard.writeText(text);
+            setSuccess(`${type} copied to clipboard!`);
+            // Clear success message after 2 seconds
+            setTimeout(() => setSuccess(''), 2000);
+        } catch (err) {
+            console.error('Failed to copy:', err);
+            setError(`Failed to copy ${type}`);
+        }
+    };
+
     useEffect(() => {
         initializeContract();
     }, []);
@@ -54,15 +66,29 @@ const HomePage = () => {
     const initializeContract = async () => {
         try {
             setLoading(true);
+            setError(''); // Clear any previous errors
+
+            // Check if MetaMask is available
+            if (!window.ethereum) {
+                throw new Error("MetaMask not detected. Please install MetaMask.");
+            }
+
+            console.log("Initializing contract...");
             const contractInstance = await getContract();
+            console.log("Contract instance created:", contractInstance.target);
+
             setContract(contractInstance);
 
             // Get user address
-            const signer = await contractInstance.runner;
+            const signer = contractInstance.runner;
             const address = await signer.getAddress();
+            console.log("User address:", address);
             setUserAddress(address);
 
-            await fetchBets(contract);
+            // Fetch bets after contract is set
+            console.log("Fetching bets...");
+            await fetchBets(contractInstance);
+            console.log("Bets fetched successfully");
         } catch (err) {
             const reason =
                 err?.revert?.args?.[0] || err?.reason || err?.message || 'Transaction failed';
@@ -279,6 +305,29 @@ const HomePage = () => {
         return `${address.slice(0, 6)}...${address.slice(-4)}`;
     };
 
+
+    const AddressCopyComponent = ({ address, type, className = "" }) => {
+        if (!address || address === '0x0000000000000000000000000000000000000000') {
+            return <span className={className}>N/A</span>;
+        }
+
+        return (
+            <div className={`d-flex align-items-center gap-1 ${className}`}>
+                <code className="small">{formatAddress(address)}</code>
+                <Button
+                    variant="outline-secondary"
+                    size="sm"
+                    className="py-0 px-1"
+                    onClick={() => copyToClipboard(address, type)}
+                    title={`Copy ${type}`}
+                    style={{ fontSize: '0.7rem', lineHeight: '1' }}
+                >
+                    📋
+                </Button>
+            </div>
+        );
+    };
+
     const formatTimestamp = (timestamp) => {
         return new Date(timestamp * 1000).toLocaleString();
     };
@@ -390,9 +439,17 @@ const HomePage = () => {
                                 bets.map((bet) => (
                                     <tr key={bet.id}>
                                         <td><strong>#{bet.id}</strong></td>
-                                        <td>{formatAddress(bet.creator)}</td>
                                         <td>
-                                            <code className="small">{formatAddress(bet.token)}</code>
+                                            <AddressCopyComponent
+                                                address={bet.creator}
+                                                type="Creator Address"
+                                            />
+                                        </td>
+                                        <td>
+                                            <AddressCopyComponent
+                                                address={bet.token}
+                                                type="Token Address"
+                                            />
                                         </td>
                                         <td>{formatEther(bet.amount)} tokens</td>
                                         <td className="small">{formatTimestamp(bet.endtime)}</td>
