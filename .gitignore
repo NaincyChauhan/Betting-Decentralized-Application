@@ -6,6 +6,9 @@ node_modules
 /cache
 /artifacts
 
+# testing file
+/testcase.txt
+
 # TypeChain files
 /typechain
 /typechain-types

@@ -6,8 +6,8 @@ module.exports = {
     solidity: "0.8.28",
     networks: {
         sepolia: {
-            url: process.env.SEPOLIA_RPC_URL,
-            accounts: [process.env.PRIVATE_KEY],
+            url: process.env.REACT_APP_SEPOLIA_RPC_URL,
+            accounts: [process.env.REACT_APP_PRIVATE_KEY],
         },
     },
     paths: {

@@ -61,7 +61,27 @@ const HomePage = () => {
 
     useEffect(() => {
         initializeContract();
+
+        listionEvents();
     }, []);
+
+    const listionEvents = () => {
+        console.log("Events listing fucntion is running.")
+        if (!contract) return;
+
+        const onWinnerSelected = (betId, winner, winnerAmount, feeAmount, event) => {
+            console.log('🎉 Winner selected:', { betId, winner, winnerAmount, feeAmount });
+            setSuccess(`Winner selected! Address: ${winner}, Amount: ${formatEther(winnerAmount)} ETH`);
+            // fetchBets(); // Refresh the bets list to reflect winner
+            console.log("this is the event:", event)
+        };
+
+        contract.on("WinnerSelected", onWinnerSelected);
+
+        return () => {
+            contract.off("WinnerSelected", onWinnerSelected); // Clean up listener
+        };
+    }
 
     const initializeContract = async () => {
         try {
@@ -122,6 +142,18 @@ const HomePage = () => {
                         participants: participants,
                         totalEtherValue: bet.totalEtherValue.toString()
                     });
+
+                    console.log("this bet data is here", {
+                        id: i,
+                        creator: bet.creator,
+                        token: bet.token,
+                        amount: bet.amount.toString(),
+                        endtime: Number(bet.endtime),
+                        closed: bet.closed,
+                        winner: bet.winner,
+                        participants: participants,
+                        totalEtherValue: bet.totalEtherValue.toString()
+                    })
                 } catch (err) {
                     console.error(`Error fetching bet ${i}:`, err);
                 }
