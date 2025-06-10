@@ -141,7 +141,7 @@ contract Betapp is ReentrancyGuard, VRFConsumerBaseV2Plus {
     ) external onlyOwner {
         require(token != address(0), "Invalid token address");
         require(priceFeed != address(0), "Invalid price feed address");
-        require(!supportedTokens[token], "Token already supported.");
+        require(!supportedTokens[token], "Token already supported");
 
         supportedTokens[token] = true;
         tokenPriceFeeds[token] = priceFeed;
@@ -153,7 +153,7 @@ contract Betapp is ReentrancyGuard, VRFConsumerBaseV2Plus {
      * @notice Only the contract owner can call this function
      */
     function removeSupportedToken(address token) external onlyOwner {
-        require(supportedTokens[token], "Token already unsupported.");
+        require(supportedTokens[token], "Token already unsupported");
         supportedTokens[token] = false;
     }
 
@@ -170,7 +170,7 @@ contract Betapp is ReentrancyGuard, VRFConsumerBaseV2Plus {
     ) external {
         require(_amount > 0, "Bet amount must be greater than zero");
         require(_duration > 0, "Duration must be greater than zero");
-        require(supportedTokens[_token], "Token not supported.");
+        require(supportedTokens[_token], "Token not supported");
 
         betIdCount++;
         uint256 betId = betIdCount;
@@ -192,13 +192,13 @@ contract Betapp is ReentrancyGuard, VRFConsumerBaseV2Plus {
         Bet storage bet = bets[_betId];
 
         require(bet.creator != address(0), "Bet does not exist");
-        require(!bet.closed, "Bet is closed.");
+        require(!bet.closed, "Bet is closed");
         require(block.timestamp < bet.endtime, "Bet duration has expired");
 
         for (uint256 i = 0; i < bet.participants.length; i++) {
             require(
                 bet.participants[i] != msg.sender,
-                "You have already joined this bet."
+                "You have already joined this bet"
             );
         }
 
@@ -235,10 +235,10 @@ contract Betapp is ReentrancyGuard, VRFConsumerBaseV2Plus {
             "Only Bet creator or participant can close this bet"
         );
         require(bet.creator != address(0), "Bet does not exist");
-        require(!bet.closed, "Bet is already closed.");
+        require(!bet.closed, "Bet is already closed");
         require(
             block.timestamp > bet.endtime,
-            "The Bet duration not ended now."
+            "The Bet duration not ended now"
         );
 
         uint256 totalTokenAmount = _calculateTotalBetAmount(_betId);
@@ -376,7 +376,7 @@ contract Betapp is ReentrancyGuard, VRFConsumerBaseV2Plus {
         require(bet.participants.length > 0, "No participants in bet");
         require(bet.totalEtherValue > 0, "No ETH available for distribution");
 
-        // Request randomness using VRF V2.5 with LINK payment (nativePayment = true)
+        // Request randomness using VRF V2.5 with ETH payment (nativePayment = true)
         uint256 requestId = s_vrfCoordinator.requestRandomWords(
             VRFV2PlusClient.RandomWordsRequest({
                 keyHash: i_keyHash,
