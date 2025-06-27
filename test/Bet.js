@@ -10,31 +10,51 @@ describe("Betapp", function () {
     async function deployBetappFixture() {
         const [owner, creator, participant1, participant2, participant3] = await ethers.getSigners();
 
+        // Deploy Mock WETH
+        const MockWETH = await ethers.getContractFactory("MockERC20");
+        const mockWETH = await MockWETH.deploy("Wrapped Ether", "WETH", 18);
+        await mockWETH.waitForDeployment();
+
         // Deploy mock ERC20 token
         const MockERC20 = await ethers.getContractFactory("MockERC20");
         const mocktoken = await MockERC20.deploy("Test Token", "LINK", 18);
+        await mocktoken.waitForDeployment();
 
         // Deploy mock chainlink price feed
         const MockPriceFeed = await ethers.getContractFactory("MockPriceFeed");
         const mockPriceFeed = await MockPriceFeed.deploy(8, ethers.parseUnits("2000", 8));
+        await mockPriceFeed.waitForDeployment();
+
 
         // Deploy mock VRF Coordinator
         const MockVRFCoordinator = await ethers.getContractFactory("MockVRFCoordinator");
         const mockVRFCoordinator = await MockVRFCoordinator.deploy();
+        await mockVRFCoordinator.waitForDeployment();
 
         // Deploy mock Uniswap Router
         const MockUniswapRouter = await ethers.getContractFactory("MockUniswapRouter");
-        const mockUniswapRouter = await MockUniswapRouter.deploy();
+        const mockUniswapRouter = await MockUniswapRouter.deploy(await mockWETH.getAddress());
+        await mockUniswapRouter.waitForDeployment();
+
+        // Fund  the mock router with ETH for swaps
+        await mockUniswapRouter.fundRouter({ value: ethers.parseEther("10")});
 
         // Deploy Betapp contract
         const Betapp = await ethers.getContractFactory("Betapp");
         const betapp = await Betapp.deploy(
             await mockVRFCoordinator.getAddress(),
             1,
-            "0x787d74caea10b2b357790d5b5247c2f63d1d91572a9846f780606e4d953677ae",
+           ethers.keccak256(ethers.toUtf8Bytes("test")),
             500000,
             await mockUniswapRouter.getAddress(),
         );
+        
+        // Fund the contract
+        const fund_contract = await creator.sendTransaction({
+            to: betapp.getAddress(),
+            value: ethers.parseEther("1")
+        });
+        await fund_contract.wait();
 
         // Add supported token
         await betapp.addSupportedToken(await mocktoken.getAddress(), await mockPriceFeed.getAddress());
@@ -193,7 +213,7 @@ describe("Betapp", function () {
             const { betapp, participant1 } = await loadFixture(createBetFixture);
             await expect(
                 betapp.connect(participant1).joinBet(999)
-            ).to.be.rejectedWith("Bet does not exist");
+            ).to.be.revertedWith("Bet does not exist");
         });
 
         it("Should prevent joining bet twice", async function () {
@@ -237,7 +257,7 @@ describe("Betapp", function () {
             await mocktoken.connect(participant1).approve(await betapp.getAddress(), betAmount);
             await expect(
                 betapp.connect(participant1).joinBet(1)
-            ).to.be.rejectedWith("Bet duration has expired");
+            ).to.be.revertedWith("Bet duration has expired");
         });
     });
 
@@ -265,25 +285,124 @@ describe("Betapp", function () {
             return { ...fixture, betAmount };
         }
 
-        // it("Should end bet successfully by creator", async function () {
-        //     const { betapp, mocktoken, mockUniswapRouter, creator, betAmount } = await loadFixture(createBetWithParticipantsFixture);
+        it("Should end bet successfully by creator or participants", async function () {
+            const { betapp, mocktoken, creator, betAmount, participant1 } = await loadFixture(createBetWithParticipantsFixture);
 
-        //     // Fast forward time beyond bet and time
-        //     await time.increase(3601);
+            const contractBalanceBefore = await ethers.provider.getBalance(betapp.getAddress());
+            const totalTokens = betAmount * 2n;
+            const contractTokenBalance = await mocktoken.balanceOf(await betapp.getAddress());
+            expect(contractTokenBalance).to.equal(totalTokens);
+            // console.log("This is Contract Mock Token Balance before",contractTokenBalance);
+            // console.log("This is Contract ETH Balance before:", contractBalanceBefore)
 
-        //     // Set up mock router to return some ETH
-        //     const ethReceived = ethers.parseEther("0.04");
-        //     await mockUniswapRouter.setETHOutput(ethReceived);
+            // Fast forward time beyond bet and time
+            await time.increase(3601);
 
-        //     const tx = await betapp.connect(creator).endBet(1);
-
-        //     await expect(tx)
-        //         .to.emit(betapp, "BetClosed")
-        //         .withArgs(1, ethReceived);
+            const tx = await betapp.connect(creator).endBet(1);
+            await tx.wait();
             
-        //     const bet = await betapp.bets(1);
-        //     expect(bet.closed).to.be.true;
-        //     expect(bet.totalEtherValue).to.equal(ethReceived);
-        // });
-    })
+            const bet = await betapp.bets(1);
+            expect(bet.closed).to.be.true;
+            expect(bet.totalEtherValue).to.be.greaterThan(0);
+
+            // check that tokens were swapped
+            const contractTokenBalanceAfter = await mocktoken.balanceOf(await betapp.getAddress());
+            expect(contractTokenBalanceAfter).to.be.lessThan(contractTokenBalance);
+
+            // Check that contract received ETH
+            const contractETHBalanceAfter = await ethers.provider.getBalance(await betapp.getAddress());
+            expect(contractETHBalanceAfter).to.be.greaterThan(contractBalanceBefore);
+
+            // console.log("This is Contract Mock Token Balance after",contractTokenBalanceAfter);
+            // console.log("This is Contract ETH Balance after:", contractETHBalanceAfter)
+        });
+
+        it("Should Fail if bet duration has not ended", async function () {
+            const { betapp, participant1 } = await loadFixture(createBetWithParticipantsFixture); 
+
+            // Try to end bet before time
+            await expect(
+                betapp.connect(participant1).endBet(1)
+            ).to.be.revertedWith("The Bet duration not ended now");
+        });
+
+        it("Should fail it no participants or creator", async function() {
+            const { betapp, participant3 } = await loadFixture(createBetWithParticipantsFixture);
+            // Fast forward time beyond bet and time
+            await time.increase(3601);
+
+            // try to end bet without participants
+            await expect(
+                betapp.connect(participant3).endBet(1)
+            ).to.be.revertedWith("Only Bet creator or participant can close this bet");
+        });
+
+        it("Should fail if bet is alrady closed", async function() {
+            const { betapp, participant2 } = await loadFixture(createBetWithParticipantsFixture);
+            await time.increase(3601);
+
+            // End bet fisrt
+            const tx = await betapp.connect(participant2).endBet(1);
+            await tx.wait();
+
+            // Try to end again
+            await expect(
+                betapp.connect(participant2).endBet(1)
+            ).to.be.revertedWith("Bet is already closed");
+        });
+
+        it("Should fail if bet is not exists", async function () {
+            const { betapp, creator } = await loadFixture(createBetWithParticipantsFixture);
+            await expect(
+                betapp.connect(creator).endBet(2)
+            ).to.be.revertedWith("Bet does not exist")
+        })
+    });
+
+    describe("Winner Selection", function () {
+        async function createClosedBetFixture() {
+            const fixture = await loadFixture(deployBetappFixture);
+            const { betapp, mocktoken, creator, participant1, participant2, participant3 } = fixture;
+
+            const betAmount = ethers.parseEther("10");
+            const duration = 3600;
+
+            await betapp.connect(creator).createBet(
+                await mocktoken.getAddress(),
+                betAmount,
+                duration
+            );
+
+            // Add Participants
+            await mocktoken.connect(participant1).approve(await betapp.getAddress(), betAmount);
+            await betapp.connect(participant1).joinBet(1);
+
+            await mocktoken.connect(participant2).approve(await betapp.getAddress(), betAmount);
+            await betapp.connect(participant2).joinBet(1);
+
+            await mocktoken.connect(participant3).approve(await betapp.getAddress(), betAmount);
+            await betapp.connect(participant3).joinBet(1);
+
+            // End bet
+            await time.increase(3601);
+            await betapp.connect(creator).endBet(1);
+
+            return { ...fixture, betAmount};
+        }
+
+        it("Should request winner selection successfully", async function () {
+            const { betapp, mockVRFCoordinator, creator } = await loadFixture(createClosedBetFixture);
+            const tx = await betapp.connect(creator).selectWinner(1);
+            await tx.wait();
+            await new Promise(resolve => setTimeout(resolve, 39000));
+
+            // await expect(tx)
+            //     .to.emit(betapp, "WinnerRequested")
+            //     .withArgs(1,1);
+
+            const bet = await betapp.bets(1);
+
+            console.log("Bet Details:", bet);
+        })
+    });
 });

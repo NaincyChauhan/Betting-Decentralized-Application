@@ -1,0 +1,13 @@
+REACT_APP_PRIVATE_KEY=
+REACT_APP_SEPOLIA_RPC_URL=https://eth-sepolia.g.alchemy.com/...
+
+# npx hardhat compile
+# npx hardhat run scripts/deploy.js --network sepolia
+# https://docs.chain.link/data-feeds/price-feeds/addresses?page=1&testnetPage=1#sepolia-testnet
+# Link address -> 0x779877A7B0D9E8603169DdbD7836e478b4624789 ---> price feed -> 0x42585eD362B3f1BCa95c640FdFf35Ef899212734
+# price feed addresss -> https://docs.chain.link/data-feeds/price-feeds/addresses?page=1&testnetPage=1
+
+
+# uniswap pair
+# LINK/USDT -> 0xc59E3633BAAC79493d908e63626716e204A45EdF ------(0x779877A7B0D9E8603169DdbD7836e478b4624789(sepolia link address))
+# USDC/USDT -> 0xA2F78ab2355fe2f984D808B5CeE7FD0A93D5270E ------(0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238(sepolia usdc address))

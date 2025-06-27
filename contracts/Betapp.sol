@@ -230,11 +230,11 @@ contract Betapp is ReentrancyGuard, VRFConsumerBaseV2Plus {
             }
         }
 
+        require(bet.creator != address(0), "Bet does not exist");
         require(
             msg.sender == bet.creator || isParticipant,
             "Only Bet creator or participant can close this bet"
         );
-        require(bet.creator != address(0), "Bet does not exist");
         require(!bet.closed, "Bet is already closed");
         require(
             block.timestamp > bet.endtime,
@@ -263,6 +263,9 @@ contract Betapp is ReentrancyGuard, VRFConsumerBaseV2Plus {
 
         IERC20 tokenContract = IERC20(token);
 
+        uint256 contractBalance = tokenContract.balanceOf(address(this));
+        require(contractBalance >= tokenAmount, "Insufficient token balance in contract");
+
         // Approve the router to spend tokens
         tokenContract.forceApprove(address(uniswapRouter), tokenAmount);
 
@@ -274,7 +277,7 @@ contract Betapp is ReentrancyGuard, VRFConsumerBaseV2Plus {
             tokenAmount,
             path
         );
-        uint256 expectedETH = expectedAmounts[1];
+        uint256 expectedETH = expectedAmounts[expectedAmounts.length - 1];
 
         uint256 minAmountOut = (expectedETH * (10000 - slippageTolerance)) /
             10000;
